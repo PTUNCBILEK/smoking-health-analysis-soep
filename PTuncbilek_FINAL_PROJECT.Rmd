@@ -1,0 +1,992 @@
+---
+title: "<h1 style='text-align: center; color: #2C3E50; font-weight: bold;'>The Impact of Smoking on Health Status:<br>An Analysis Using SOEP Data</h1>"
+author: "<h3 style='text-align: center;'>Pinar Tuncbilek - 148072</h3>"
+date: "<h4 style='text-align: center;'>`r format(Sys.Date(), '%B %d, %Y')`</h4>"
+output:
+  html_document:
+    toc: true
+    number_sections: true
+    citation_package: natbib
+    code_folding: hide
+    theme: cerulean
+bibliography: references.bib
+---
+
+```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(haven)
+library(tidyr)
+library(knitr)
+```
+
+# Introduction
+
+This analysis investigates the relationship between smoking behavior and health status using data from the SOEP (Socio-Economic Panel). 
+
+## What is SOEP?
+The Socio-Economic Panel (SOEP) is a long-term, representative study that collects socio-economic data from individuals and households in Germany. Established in 1984, it tracks the same respondents over multiple years, making it a valuable source for longitudinal research.
+
+## Why Use SOEP Data?
+SOEP provides detailed information on various aspects of life, including:
+
+- **Health status** (self-reported general health)
+- **Smoking behavior** (current and past smoking habits)
+- **Socio-economic factors** (income, education, employment)
+- **Demographics** (age, gender, household structure)
+
+This panel structure allows researchers to analyze trends and relationships over time rather than just cross-sectional snapshots.
+
+## Research Objective
+Understanding the connection between smoking and health is crucial for both public health research and policy-making. This study aims to explore:
+- Whether smoking behavior is associated with self-reported health status
+- How other socio-economic factors (such as age and income) influence this relationship
+- Potential trends in health disparities among smokers and non-smokers
+
+Additionally, we address data handling techniques, including missing values, variable scaling, and appropriate statistical methods, to ensure the reliability of our findings.
+
+## Data Preparation
+
+Before conducting the analysis, I examined the relevant datasets from the SOEP (Socio-Economic Panel) to identify the necessary variables. The datasets reviewed include:
+
+- **pl.dta**: Contains individual-level data.
+- **health.dta**: Contains health-related data.
+- **pequiv.dta**: Contains equivalized income data.
+
+I explored the contents of these datasets through the Paneldata documentation to locate the relevant variables. The variables selected for analysis are:
+
+- *From pl.dta*  :
+  *cid* : Unique identifier for individuals,
+  *syear* : Survey year  ,
+  *ple0008* : Health status variable  ,
+  *ple0081_v2* : Smoking status variable  ,
+  *plg0076* : Education completed variable.
+
+- *From pequiv.dta* :
+  *cid* : Unique identifier for individuals ,
+  *syear* : Survey year  ,
+  *d11101* : Age variable  ,
+  *d11102ll* : Gender variable.
+
+After identifying the relevant variables, I created a consolidated table by merging these datasets on the `cid` and `syear` variables. This table was then cleaned and prepared for analysis.
+
+## Challenges in Data Preparation
+During the data preparation process, a few challenges arose:
+
+**Missing Values** : Some variables had missing values. To handle this, I performed imputation for variables where appropriate or removed observations with excessive missing data.
+
+**Mismatched Data Types**: There were instances of mismatched data types across datasets (e.g., numeric variables stored as strings). I addressed this by converting variables to the correct data types for analysis.
+
+**Duplicate Records**: Duplicate entries were identified and removed to ensure the integrity of the dataset.
+
+## Summary of Observations ;
+
+The dataset consists of the following:
+
+1. *Number of Total Observations in data (fr pl.dta)*: 4.953
+2. *Number of Total Observations in pequiv_data (fr pequiv.dta)* : 4.953
+3. *Number of Total Observations after cleaned * cleaned_data : 16.852
+
+# Data Analysis 
+
+## Data Analysis - Part I
+
+### Key Variables ;
+
+  **Dependent Variable (Y)**: Health Status  
+     Justification: Health status is the primary outcome of interest, as the analysis aims to understand how smoking behavior affects individuals' well-being.
+  
+   **Independent Variable (X)** : Smoking Status  
+     Justification: Smoking behavior is the key factor being analyzed in relation to health status.
+  
+### Control Variables ;  
+
+  **Age** : Age is an important control variable as it can influence both health and smoking behavior.
+  
+  **Gender** : Gender plays a role in health outcomes and smoking habits, so it is   essential to account for it.
+  
+  **Education** : Education level can impact both health behavior and outcomes, making it a relevant control variable.
+
+### Survey Question Phrasing ; 
+
+   **Smoking Status** : "Do you smoke? (Yes/No)"
+   **Health Status**: "How would you rate your general health? (1 = Very Good, 5 = Bad)"
+   
+   **Age** : Age is collected as a continuous variable.
+   
+   **Gender**: Gender is recorded as a binary variable (Male/Female).
+   
+   **Education** : "Education completed? (1 = Yes , 2 = No )"
+
+### Alternative Variables ;
+
+   Alternative variables for smoking status could include the frequency of smoking, or the amount smoked per day. However, for this analysis, the simple Yes/No categorization provides a clearer and more straightforward examination.
+   For health status, a continuous measure (e.g., self-reported health index) could be used instead of a 1-5 scale, but the current categorization offers sufficient insight for the analysis.
+
+### Justification for Control Variables ;  
+
+   **Age** : Age is relevant because health tends to decline with age, and smoking habits may vary by age group.
+   
+   **Gender** : Gender influences health outcomes and smoking patterns, which is why it is an important factor to control for.
+   
+   **Education** : Education influences both smoking habits and health awareness, which can impact the relationship between smoking and health status.(keeping only the 'Yes' and 'No' values to avoid missing or ambiguous entries, ensuring that our analysis is based on clear information.")
+
+```{r load-data, echo=FALSE}
+# Data Loading - Load the first dataset
+data <- read_dta("/Users/pinartuncbilek/Desktop/PROJECT DATA /Final Project Data-20250115/pl.dta", 
+                 col_select = c("cid", "syear", "ple0081_v2", "ple0008", "plg0076")) %>%
+  rename(
+    survey_year = syear,
+    health_status = ple0008,
+    smoking_status = ple0081_v2,
+    Education_completed = plg0076
+  )
+# Load the second dataset
+pequiv_data <- read_dta("/Users/pinartuncbilek/Desktop/PROJECT DATA /Final Project Data-20250115/pequiv.dta", 
+                        col_select = c("cid", "syear", "d11101", "d11102ll"))
+colnames(pequiv_data) <- c("cid", "survey_year", "Age", "Gender")
+```
+
+
+```{r, echo=FALSE}
+
+# Health Status Labelling
+data <- data %>%
+  filter(health_status %in% c(1, 2, 3, 4, 5)) %>%
+  mutate(health_status = factor(health_status,
+                                levels = c(1, 2, 3, 4, 5),
+                                labels = c("Very Good", "Good", "Satisfactory", "Not Good", "Bad")))
+# Smoking Status Labelling
+data <- data %>%
+  filter(smoking_status %in% c(1, 2)) %>%
+  mutate(smoking_status = factor(smoking_status,
+                                 levels = c(1, 2),
+                                 labels = c("Yes", "No")))
+# NA and Invalid Data Cleaning (for the data dataset - pl.dta)
+data <- data %>%
+  filter(!is.na(health_status) & !is.na(smoking_status))
+# Gender Status Labelling
+pequiv_data <- pequiv_data %>%
+  filter(Gender %in% c(1, 2)) %>%
+  mutate(Gender = factor(Gender,
+                         levels = c(1, 2),
+                         labels = c("Male", "Female")))
+# Education_completed Labelling
+data <- data %>%
+  filter(Education_completed %in% c(1, 2)) %>%
+  mutate(Education_completed = factor(Education_completed,
+                                      levels = c(1, 2),
+                                      labels = c("Yes", "No"))) %>%
+  filter(!is.na(Education_completed))
+```
+
+
+```{r data-cleaning, echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
+# Data Cleaning and Merging 
+merged_data <- inner_join(data, pequiv_data, by = c("cid", "survey_year"))
+# Remove missing values
+cleaned_data <- merged_data %>% 
+  drop_na(health_status, smoking_status, Age, Gender, Education_completed)
+# Filter age range (18-80 years)
+cleaned_data <- cleaned_data %>% 
+  filter(Age >= 18 & Age <= 80)
+#check Age values 
+table(cleaned_data$Age)
+
+merged_data <- merged_data %>%
+  mutate(
+    health_status_numeric = case_when(
+      health_status == "Very Good" ~ 5,
+      health_status == "Good" ~ 4,
+      health_status == "Satisfactory" ~ 3,
+      health_status == "Not Good" ~ 2,
+      health_status == "Bad" ~ 1,
+      TRUE ~ NA_real_
+    )
+  )
+# Age Filtering and Cleaning Invalid Values
+merged_data <- merged_data %>%
+  filter(Age >= 18 & Age <= 80 & Age != -1 & Age != 0)
+# Cleaning Invalid health_status_numeric Values
+merged_data <- merged_data %>%
+  mutate(health_status_numeric = if_else(health_status_numeric == -1, NA_real_, health_status_numeric))
+```
+
+## Data Analysis Part II
+
+### Summary Statistics 
+
+This section provides summary statistics, including descriptive analyses and statistical tests. The relevant R codes are available in Appendix 5.2.
+
+### Summary of Observations (with Percentages)
+
+We analyzed the number of observations and summarizations data distribution.
+
+|Smoking.Status | Count| Percentage (%)|
+|---------------|------|---------------|
+|Smokers        |  4424|           26.3|
+|Non-Smokers    | 12428|           73.7|
+ 
+**Comment:** 
+The dataset consists of 4424 smokers (26.3%) and 12428 non-smokers (73.7%). This indicates that the majority of the sample are non-smokers, but smoking remains a significant factor in the analysis.
+
+### Observations Breakdown by Year (with Percentages)
+
+We analyzed the number of observations by year and other key variables.
+
+| survey_year| total_observations| smokers| non_smokers| smokers_percentage| non_smokers_percentage|
+|-----------:|------------------:|-------:|-----------:|------------------:|----------------------:|
+|        2004|               1611|     600|        1011|               37.2|                   62.8|
+|        2006|               1609|     648|         961|               40.3|                   59.7|
+|        2008|               1439|     477|         962|               33.1|                   66.9|
+|        2010|               1382|     398|         984|               28.8|                   71.2|
+|        2014|               2039|     515|        1524|               25.3|                   74.7|
+|        2016|               2034|     457|        1577|               22.5|                   77.5|
+|        2018|               2234|     542|        1692|               24.3|                   75.7|
+|        2020|               1971|     389|        1582|               19.7|                   80.3|
+|        2021|                174|      27|         147|               15.5|                   84.5|
+|        2022|               2359|     371|        1988|               15.7|                   84.3|
+
+**Comment:** 
+The proportion of smokers has gradually decreased over the years, with the highest percentage observed in 2006 (40.3%) and the lowest in 2022 (15.7%).
+
+### Descriptive Statistics for Key Variables
+
+Descriptive statistics were calculated to summarize key variables.
+
+|Variable      |  Mean| Std.Dev| Min| Max|
+|--------------|------|-------:|----|----|
+|Health Status |  3.92|    0.86|   1|   5|
+|Age           | 36.60|   14.80|  18|  80|
+
+**Comment:** 
+The average health status is 3.92 on a 1-5 scale, suggesting a fair to good self-assessment of health. The average age is 36.6 years, with a range from 18 to 80 years, reflecting a diverse age distribution in the sample.
+
+## Data Analysis Part III 
+
+Additional statistical tests were conducted to explore the relationship between smoking behavior and health status variables.The relevant R codes are available in Appendix 5.3.
+
+### Chi-Square Test  
+
+**Why?**
+Because both smoking status and health status are categorical, making the Chi-Square test an appropriate choice.
+
+**Test Results:**
+
+Pearson's Chi-squared test
+
+data:  `cleaned_data$smoking_status` and `cleaned_data$health_status`
+X-squared = 136.75, df = 4, p-value < 2.2e-16
+
+**Comment:**  
+
+The Chi-Square test showed a significant association (X-squared = 136.75, p < 2.2e-16) between smoking status and health status. This indicates that smoking behavior has a significant impact on how individuals rate their health. In other words, people’s health status tends to differ depending on whether they smoke or not.  
+
+### T-Test
+
+**Why?**
+
+Since health status is a continuous variable, a T-test allows us to see if smokers and non-smokers have significantly different mean health ratings.
+
+**Test Results:**
+
+Welch Two Sample t-test
+
+data:  health_status_numeric by smoking_status		
+
+|Metric              |     Value      |
+|--------------------|----------------|
+|T-Statistic         |    -11.227     |
+|Degrees of Freedom  |      7584      |
+|P-Value             |   < 2.2e-16    |
+|Mean (Smokers)      |      3.8       |
+|Mean (Non-Smokers)  |      3.97      |
+|Confidence Interval | (-0.2, -0.141) |  
+
+**Comment:**  
+
+Smokers reported a lower average health status (mean = 3.80) compared to non-smokers (mean = 3.97). The difference was statistically significant (t = -11.227, p < 2.2e-16), indicating that smokers generally perceive their health as worse than non-smokers. The 95% confidence interval (-0.20 to -0.14) suggests that this difference is both consistent and meaningful.  
+
+### Regression 
+
+**Why?**
+This method helps us measure the direct effect of smoking while adjusting for potential confounders like age and education.
+
+**Test Results:**
+
+Call:
+lm(formula = health_status_numeric ~ smoking_status + Age, data = merged_data)
+
+Linear Regression Coefficients
+
+|Coefficients     | Estimate | Std. Error | t value | Pr(>&#124;t&#124;) |
+|-----------------|----------|------------|---------|--------------------|
+|(Intercept)      |  3.844   |   0.021    | 185.973 |       0.000        |
+|smoking_statusNo |  0.171   |   0.015    | 11.429  |       0.000        |
+|Age              |  -0.001  |   0.000    | -2.755  |       0.006        |
+
+Model Fit Statistics
+
+|Metric              |          Value          |
+|--------------------|-------------------------|
+|Residual Std. Error |         0.8545          |
+|Multiple R-squared  |         0.00808         |
+|Adjusted R-squared  |         0.00796         |
+|F-statistic         | 68.64 on 2 and 16849 DF |
+|p-value             |        < 2.2e-16        |
+
+**Comments**
+ 
+Smoking Status:Non-smokers reported significantly better health than smokers (β = 0.171, p < 2e-16). The positive coefficient indicates that being a non-smoker is associated with higher self-reported health status, even after controlling for age.
+Age:Age was a significant negative predictor of health status (β = -0.0012, p = 0.00587), meaning that older individuals tend to report slightly worse health compared to younger individuals.
+
+**Conclusion & Interpretation**
+
+Non-smokers consistently report better health compared to smokers, even after adjusting for age.
+The results suggest that smoking is associated with poorer health perceptions.
+Smoking cessation may improve self-reported health outcomes.
+
+# Visual Analysis
+
+This section presents visualizations of the data to support the analysis. The R codes for creating these plots are provided in Appendix 5.4.
+
+## Health Status by Smoking Status Visualization
+```{r health-smoking-status,echo=FALSE}
+ggplot(cleaned_data, aes(x = factor(smoking_status), y = health_status, color = factor(smoking_status))) +
+  geom_jitter(width = 0.2, alpha = 0.5) +
+  labs(
+    x = "Smoking Status ",
+    y = "Health Status",
+    color = "Smoking Status"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 12), 
+        axis.text.y = element_text(size = 12), 
+        plot.title = element_text(hjust = 0.5, size = 14))
+```
+This visualization represents the relationship between smoking status and health status. The x-axis categorizes individuals as either smokers (yes) or non-smokers (no), while the y-axis displays their self-reported health status, ranging from 1 (very good) to 5 (very bad).
+
+The plot uses jittered points to showcase individual data entries, allowing us to observe variations within the groups. A few key observations include:
+
+Smokers (yes) generally display a wider distribution of health statuses, with some individuals reporting poor health (4 or 5) and others reporting very good health (1).
+
+Non-smokers (no) tend to cluster more tightly around better health statuses, indicating that they report very good (1) or good health (2) more frequently.
+
+Outliers, represented as scattered points far from the general cluster, suggest exceptions where non-smokers report poor health or smokers report very good health.
+
+This graph gives an initial impression that non-smokers might have better overall health outcomes compared to smokers,though further analysis with additional variables (e.g., age, income, education) is needed to confirm this relationship.
+
+## Health Status by Smoker vs. Non-Smokers Visualization
+```{r smoker-vs-nonsmoker, echo=FALSE}
+ggplot(cleaned_data, aes(x = factor(smoking_status), fill = factor(health_status))) +
+  geom_bar(position = "dodge", width = 0.7) +  # Bars side-by-side
+  labs(
+    x = "Smoking Status",
+    y = "Count",
+    fill = "Health Status"
+  ) +
+  scale_fill_manual(values = c("red", "orange", "yellow", "green", "blue")) +  # Health status colors
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  )
+```
+This bar plot shows the distribution of health statuses among smokers and non-smokers.
+
+**Smoking Status Groups** : The x-axis represents smoking status, categorized as smokers (yes) and non-smokers (no). Each bar indicates the count of individuals within each health status category.
+
+**Health Status Categories** : The colors represent different health statuses, ranging from very poor to very good.
+
+**Observations** :
+Smokers and non-smokers seem to have a noticeable difference in their health distributions.
+Non-smokers generally have more individuals in better health categories (e.g., "Good" or "Very Good").
+Smokers, on the other hand, show higher counts in poorer health statuses.
+This visualization highlights a potential relationship between smoking and health outcomes, where non-smokers tend to have better overall health. However, further analysis may be required to account for other influencing factors, such as age, income, or education.
+
+## Health Status by Gender and Smoking Status Visualization
+```{r gender-smoking-status, echo=FALSE}
+cleaned_data <- cleaned_data %>%
+  mutate(
+    health_status_grouped = case_when(
+      health_status %in% c("Not Good", "Bad") ~ "Not Good/Bad", 
+      health_status %in% c("Very Good", "Good", "Satisfactory") ~ health_status,
+      TRUE ~ NA_character_
+    ),
+    health_status_grouped = factor(health_status_grouped, 
+                                   levels = c("Very Good", "Good", "Satisfactory", "Not Good/Bad"))
+  )
+
+ggplot(cleaned_data, aes(x = factor(smoking_status), fill = Gender)) +
+  geom_bar(position = "dodge") +  # dodge' for side-by-side bars
+  facet_wrap(~ health_status_grouped, scales = "free_y") +
+  labs(
+    x = "Smoking Status",
+    y = "Count",
+    fill = "Gender"
+  ) +
+  scale_fill_manual(values = c("blue", "pink")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  ) +
+  geom_text(
+    aes(label = after_stat(count)),  # after_stat(count) updated
+    stat = "count", 
+    position = position_dodge(0.8),  # Side-by-side position adjustment
+    size = 3
+  )
+```
+This bar plot illustrates the distribution of genders across smoking statuses while stratified by different health status categories.
+
+**Facet by Health Status** : Each subplot represents a distinct health status, ranging from very poor to very good. This allows us to observe how gender and smoking behavior vary within specific health groups.
+
+**Gender Breakdown** : The bars are color-coded by gender: blue for males and pink for females.
+
+**Smoking Status on x-Axis** : The x-axis shows smoking behavior, where the categories are smokers (yes) and non-smokers (no). The bars in each category represent the count of individuals for each gender.
+
+**Observations** :
+Within better health categories (e.g., "Good" or "Very Good"), there appear to be more non-smokers, especially among females.
+In poorer health categories, smokers are more prevalent, and the gender distribution tends to vary.
+The number annotations on the bars highlight the specific counts, making it easier to compare genders and smoking statuses.
+This visualization provides insights into the interaction between smoking behavior, gender, and health outcomes. It suggests that smoking status might affect health differently for males and females, though additional analysis would be needed to explore this relationship in more depth.
+This visualization effectively combines age, smoking behavior, and health status, revealing trends that warrant deeper exploration.
+
+## Health Status by Age and Smoking Status Visualization
+```{r age-smoking-status, echo=FALSE}
+cleaned_data <- cleaned_data %>%
+  mutate(
+    health_status_grouped = case_when(
+      health_status %in% c("Not Good", "Bad") ~ "Not Good/Bad",   
+      health_status == "Very Good" ~ "Very Good",
+      health_status == "Good" ~ "Good",
+      health_status == "Satisfactory" ~ "Satisfactory", 
+      TRUE ~ NA_character_
+    ),
+    health_status_grouped = factor(health_status_grouped, 
+                                   levels = c("Very Good", "Good", "Satisfactory", "Not Good/Bad")),
+    
+    age_group = case_when(
+      Age >= 18 & Age <= 40 ~ "18-40",
+      Age >= 41 & Age <= 60 ~ "41-60",
+      Age >= 61 & Age <= 80 ~ "61-80",
+      TRUE ~ "Other"
+    )
+  )
+
+ggplot(cleaned_data, aes(x = factor(age_group), fill = factor(smoking_status))) +
+  geom_bar(position = "dodge") +
+  facet_wrap(~ health_status_grouped, scales = "free_y") + 
+  labs(
+    x = "Age Group",
+    y = "Count",
+    fill = "Smoking Status"
+  ) +
+  scale_fill_manual(values = c("red", "green")) + 
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  )
+```
+This bar plot visualizes the relationship between age groups, smoking status, and health status, providing insights into how these variables interact.
+
+**Age Groups on x-Axis**: 
+The x-axis categorizes individuals into three distinct age groups as 18-40 (young adults), 41-60 (middle-aged adults), 61-80 (older adults).
+
+**Smoking Status as Fill**: 
+Bars are color-coded to represent smoking behavior.Different colors correspond to smokers and non-smokers.
+
+**Facets by Health Status** : 
+Each subplot represents a specific health status, allowing us to observe variations across different health levels, from "Very Poor" to "Very Good."
+
+**Observations** :
+
+**Younger Age Group (18-40)**: 
+Smokers seem to dominate this age group in poorer health statuses, while non-smokers are more prevalent in better health categories.
+
+**Middle-Aged Group (41-60)**: 
+This group displays a more balanced distribution between smokers and non-smokers, but poorer health categories have higher proportions of smokers.
+
+**Older Age Group (61-80)**:
+Non-smokers tend to have better health statuses, whereas smokers appear more frequently in poorer health categories.
+The total counts in each subplot provide insight into the prevalence of smoking and non-smoking behaviors across different health statuses and age groups.
+
+**Implications**:
+The visualization suggests that smoking status might significantly affect health outcomes, particularly in younger and older age groups.
+Further analysis could investigate the underlying causes of these patterns, such as lifestyle or comorbidities.
+
+## Health Status by Education Completed and Smoking Status Visualization
+```{r education-smoking-status, echo=FALSE, warning=FALSE, message=FALSE}
+ggplot(merged_data, aes(x = factor(smoking_status), y = health_status_numeric, color = factor(Education_completed), group = Education_completed)) +
+  geom_smooth(method = "loess", se = FALSE, size = 1.5, span = 0.8) +
+  labs(
+    x = "Smoking Status",
+    y = "Health Status",
+    color = "Education Completed"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  )
+```
+This line plot visualizes the relationship between smoking status, education level, and health status, allowing for the exploration of how education and smoking interact to influence health through smooth, continuous trends.
+
+**Smoking Status on x-Axis** : The x-axis distinguishes between smokers and non-smokers, labeled as Yes = Smoker and No = Non-Smoker.
+
+**Health Status on y-Axis** : The y-axis represents health status on a numeric scale, where higher values indicate poorer health.
+
+**Education Level as Colour**: Each smooth line is colored to represent education completion status:
+Red = Completed Education
+Green = Incomplete Education
+
+**Observations** :
+
+**Smokers** : The lines for smokers show a clear trend towards poorer health outcomes, especially among those with incomplete education. The curve suggests that health status declines more steeply for smokers without completed education.
+
+**Non-Smokers** : Non-smokers generally exhibit better health outcomes, with smoother, more stable curves. Those with completed education tend to have the best health status, showing minimal fluctuation.
+
+**Education Level Impact** : The lines highlight that higher education levels are consistently associated with better health outcomes, particularly for non-smokers. The gap between education levels is more noticeable among smokers, indicating that education may buffer some of the negative health effects of smoking.
+
+**Implications** :
+
+Smoking remains a significant determinant of health status, with smokers generally experiencing worse health outcomes, regardless of education level.
+The influence of education on health is especially pronounced among non-smokers, where higher education correlates strongly with better health.
+This graph suggests that interventions focusing on both smoking cessation and education could significantly improve public health outcomes.
+
+**Final Notes**
+
+This updated visualization offers a more fluid and dynamic view of the relationship between smoking, education, and health. The smooth curves help identify trends and patterns that might not be as visible in traditional box plots, making it easier to understand how these factors interact over different groups.
+
+# Overall Conclusion
+
+In this analysis, we investigated the relationship between smoking status and various related variables such as age, gender, and education using SOEP data. The key insights and implications from our findings are summarized below:
+
+**Health Status by Smoking Status** ;
+
+    Insight : Smokers generally report poorer health compared to non-smokers.
+
+    Implication : Smoking has a clear negative impact on health, and interventions to reduce smoking could lead to improved public health outcomes.
+
+**Health Status by Smokers vs. Non-Smokers** ;
+
+    Insight : Non-smokers tend to have a higher count in better health categories.
+
+    Implication : Promoting non-smoking behaviors can result in better overall health for the population, with fewer individuals in poor health.
+
+**Health Status by Gender and Smoking Status** ;
+
+    Insight : Both smoking status and gender influence health status, with smokers of both genders generally reporting worse health.
+
+    Implication : Gender-specific health interventions may be needed to address the differing impacts of smoking on men and women.
+
+**Health Status by Age and Smoking Status** ;
+
+    Insight : Older smokers tend to have worse health compared to younger smokers, and non-smokers in all age groups report better health.
+
+    Implication : Targeting smoking cessation efforts at older individuals could help mitigate the long-term health effects of smoking.
+
+**Health Status by Education and Smoking Status**  ;
+
+    Insight : Higher education is associated with better health, especially among non-smokers.
+
+    Implication : Education can be an important factor in health outcomes, and increasing educational attainment could potentially reduce smoking rates and improve health.
+
+**Overall Conclusion:**
+
+This analysis highlights the strong association between smoking and health, as well as the influence of age, gender, and education on this relationship. Smokers generally report worse health outcomes, and interventions aimed at reducing smoking could significantly improve public health. Additionally, targeting education and age groups, especially older adults, could help reduce the long-term effects of smoking and promote healthier lifestyles across the population.
+
+**Statistical Notes**
+
+- Observations were filtered to include respondents aged 18-80.
+- Missing values were excluded to ensure clean analysis.
+- All visualizations include appropriate axis labels and legends for clarity.
+
+# Appendix for Codes 
+This section contains all the R codes used for data preparation, analysis, and visualization.For specific code details, please refer to the corresponding sections below.  
+
+## Data Preparation Codes  
+
+Data Loading (R codes for loading the datasets.) 
+```{r setup-appendix, echo=TRUE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(haven)
+library(tidyr)
+```
+
+```{r load-data-appendix, echo=TRUE}
+# Load the first dataset
+data <- read_dta("/Users/pinartuncbilek/Desktop/PROJECT DATA /Final Project Data-20250115/pl.dta", 
+                 col_select = c("cid", "syear", "ple0081_v2", "ple0008", "plg0076")) %>%
+  rename(
+    survey_year = syear,
+    health_status = ple0008,
+    smoking_status = ple0081_v2,
+    Education_completed = plg0076
+  )
+# Load the second dataset
+pequiv_data <- read_dta("/Users/pinartuncbilek/Desktop/PROJECT DATA /Final Project Data-20250115/pequiv.dta", 
+                        col_select = c("cid", "syear", "d11101", "d11102ll"))
+colnames(pequiv_data) <- c("cid", "survey_year", "Age", "Gender")
+```
+
+
+```{r, echo=TRUE}
+
+# Health Status Labelling
+data <- data %>%
+  filter(health_status %in% c(1, 2, 3, 4, 5)) %>%
+  mutate(health_status = factor(health_status,
+                                levels = c(1, 2, 3, 4, 5),
+                                labels = c("Very Good", "Good", "Satisfactory", "Not Good", "Bad")))
+# Smoking Status Labelling
+data <- data %>%
+  filter(smoking_status %in% c(1, 2)) %>%
+  mutate(smoking_status = factor(smoking_status,
+                                 levels = c(1, 2),
+                                 labels = c("Yes", "No")))
+# NA and Invalid Data Cleaning (for the data dataset - pl.dta)
+data <- data %>%
+  filter(!is.na(health_status) & !is.na(smoking_status))
+# Gender Status Labelling
+pequiv_data <- pequiv_data %>%
+  filter(Gender %in% c(1, 2)) %>%
+  mutate(Gender = factor(Gender,
+                         levels = c(1, 2),
+                         labels = c("Male", "Female")))
+# Education_completed Labelling
+data <- data %>%
+  filter(Education_completed %in% c(1, 2)) %>%
+  mutate(Education_completed = factor(Education_completed,
+                                      levels = c(1, 2),
+                                      labels = c("Yes", "No"))) %>%
+  filter(!is.na(Education_completed))
+```
+Data Cleaning & Merging (R codes for cleaning, merging datasets, and handling missing values.)  
+```{r data-cleaning-appendix, echo=TRUE, eval=FALSE, warning=FALSE, message=FALSE, results='hide'}
+# Merge datasets
+merged_data <- inner_join(data, pequiv_data, by = c("cid", "survey_year"))
+# Remove missing values
+cleaned_data <- merged_data %>% 
+  drop_na(health_status, smoking_status, Age, Gender, Education_completed)
+# Filter age range (18-80 years)
+cleaned_data <- cleaned_data %>% 
+  filter(Age >= 18 & Age <= 80)
+#check Age values 
+table(cleaned_data$Age)
+
+merged_data <- merged_data %>%
+  mutate(
+    health_status_numeric = case_when(
+      health_status == "Very Good" ~ 5,
+      health_status == "Good" ~ 4,
+      health_status == "Satisfactory" ~ 3,
+      health_status == "Not Good" ~ 2,
+      health_status == "Bad" ~ 1,
+      TRUE ~ NA_real_
+    )
+  )
+# Age Filtering and Cleaning Invalid Values
+merged_data <- merged_data %>%
+  filter(Age >= 18 & Age <= 80 & Age != -1 & Age != 0)
+# Cleaning Invalid health_status_numeric Values
+merged_data <- merged_data %>%
+  mutate(health_status_numeric = if_else(health_status_numeric == -1, NA_real_, health_status_numeric))
+```
+
+## Summary Statistics  
+
+Observations (R codes to observe and summarize data distribution.) 
+```{r summary-stats-appendix, echo=TRUE, eval=FALSE}
+summary_stats <- merged_data %>%
+  summarise(
+    total_observations = n(),
+    smokers = sum(smoking_status == "Yes", na.rm = TRUE),
+    non_smokers = sum(smoking_status == "No", na.rm = TRUE)
+  ) %>%
+  mutate(
+    smokers_percentage = round((smokers / total_observations) * 100, 1),
+    non_smokers_percentage = round((non_smokers / total_observations) * 100, 1)
+  )
+
+# Display the table
+knitr::kable(data.frame(
+  `Smoking Status` = c("Smokers", "Non-Smokers"),
+  `Count` = c(summary_stats$smokers, summary_stats$non_smokers),
+  `Percentage (%)` = c(summary_stats$smokers_percentage, summary_stats$non_smokers_percentage)
+))
+```
+
+Descriptive Statistics (R codes to observe breakdown by year.)
+```{r breakdown-year, echo=TRUE, eval=FALSE}
+observations_by_year <- merged_data %>%
+  group_by(survey_year) %>%
+  summarise(
+    total_observations = n(),
+    smokers = sum(smoking_status == "Yes", na.rm = TRUE),
+    non_smokers = sum(smoking_status == "No", na.rm = TRUE)
+  ) %>%
+  mutate(
+    smokers_percentage = round((smokers / total_observations) * 100, 1),
+    non_smokers_percentage = round((non_smokers / total_observations) * 100, 1)
+  )
+
+# Display the table
+knitr::kable(observations_by_year)
+```
+
+Descriptive Statistics for Key Variables (R codes for calculating descriptive statistics such as mean, median, etc.) 
+```{r descriptive-stats, echo=TRUE, eval=FALSE}
+descriptive_stats <- merged_data %>%
+  summarise(
+    min_age = min(Age, na.rm = TRUE),
+    max_age = max(Age, na.rm = TRUE),
+    avg_age = round(mean(Age, na.rm = TRUE), 1),
+    sd_age = round(sd(Age, na.rm = TRUE), 1),
+    min_health = min(health_status_numeric, na.rm = TRUE),
+    max_health = max(health_status_numeric, na.rm = TRUE),
+    avg_health = round(mean(health_status_numeric, na.rm = TRUE), 2),
+    sd_health = round(sd(health_status_numeric, na.rm = TRUE), 2)
+  )
+
+# Display the table
+knitr::kable(data.frame(
+  Variable = c("Health Status", "Age"),
+  Mean = c(descriptive_stats$avg_health, descriptive_stats$avg_age),
+  `Std Dev` = c(descriptive_stats$sd_health, descriptive_stats$sd_age),
+  Min = c(descriptive_stats$min_health, descriptive_stats$min_age),
+  Max = c(descriptive_stats$max_health, descriptive_stats$max_age)
+))
+```
+## Additional Statistical Tests Codes
+
+Chi-Square
+```{r chi-square, echo=TRUE, eval=FALSE}
+# Chi-square test for smoking status and education level
+chi_square_result <- chisq.test(cleaned_data$smoking_status, cleaned_data$health_status)
+chi_square_result
+```
+
+
+T-Test 
+```{r t-test, echo=TRUE, eval=FALSE}
+# T-test for health status comparison between smokers and non-smokers
+t_test_result <- t.test(health_status_numeric ~ smoking_status, data = merged_data)
+t_test_table <- data.frame(
+  Metric = c("T-Statistic", "Degrees of Freedom", "P-Value", "Mean (Smokers)", "Mean (Non-Smokers)", "Confidence Interval"),
+  Value = c(
+    round(t_test_result$statistic, 3),
+    round(t_test_result$parameter, 0),
+    format.pval(t_test_result$p.value, digits = 4, scientific = TRUE),
+    round(t_test_result$estimate[1], 2),
+    round(t_test_result$estimate[2], 2),
+    paste0("(", round(t_test_result$conf.int[1], 3), ", ", round(t_test_result$conf.int[2], 3), ")")
+  )
+)
+kable(t_test_table, 
+      align = c('l', 'c')) 
+```
+
+Linear Regression 
+```{r linear-regression, echo=TRUE, eval=FALSE}
+regression_model <- lm(health_status_numeric ~ smoking_status + Age, data = merged_data)
+reg_summary <- summary(regression_model)
+
+coeff_table <- kable(reg_summary$coefficients, 
+                     digits = 3, 
+                     align = 'c')
+additional_stats <- data.frame(
+  Metric = c("Residual Std. Error", "Multiple R-squared", "Adjusted R-squared", "F-statistic", "p-value"),
+  Value = c(
+    round(reg_summary$sigma, 4),
+    round(reg_summary$r.squared, 5),
+    round(reg_summary$adj.r.squared, 5),
+    paste0(round(reg_summary$fstatistic[1], 2), " on ", reg_summary$fstatistic[2], " and ", reg_summary$fstatistic[3], " DF"),
+    "< 2.2e-16"
+  )
+)
+
+additional_table <- kable(additional_stats, 
+                          digits = 4, 
+                          align = c('l', 'c')) 
+coeff_table
+additional_table
+```
+
+
+## Visualization Codes
+
+Health Status by Smoking Status Visualization
+```{r health-smoking-status-appendix, echo=TRUE, eval=FALSE}
+ggplot(cleaned_data, aes(x = factor(smoking_status), y = health_status, color = factor(smoking_status))) +
+  geom_jitter(width = 0.2, alpha = 0.5) +
+  labs(
+    title = "Health Status by Smoking Status",
+    x = "Smoking Status ",
+    y = "Health Status",
+    color = "Smoking Status"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 12), 
+        axis.text.y = element_text(size = 12), 
+        plot.title = element_text(hjust = 0.5, size = 14))
+```
+
+Health Status by Smoker vs. Non-Smokers Visualization
+```{r smoker-vs-nonsmoker-appendix, echo=TRUE, eval=FALSE}
+ggplot(cleaned_data, aes(x = factor(smoking_status), fill = factor(health_status))) +
+  geom_bar(position = "dodge", width = 0.7) +  # Bars side-by-side
+  labs(
+    title = "Smokers vs Non-Smokers by Health Status",
+    x = "Smoking Status",
+    y = "Count",
+    fill = "Health Status"
+  ) +
+  scale_fill_manual(values = c("red", "orange", "yellow", "green", "blue")) +  # Health status colors
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  )
+
+```
+
+Health Status by Gender and Smoking Status Visualization
+```{r gender-smoking-status-appendix, echo=TRUE, eval=FALSE}
+cleaned_data <- cleaned_data %>%
+  mutate(
+    health_status_grouped = case_when(
+      health_status %in% c("Not Good", "Bad") ~ "Not Good/Bad", 
+      health_status %in% c("Very Good", "Good", "Satisfactory") ~ health_status,
+      TRUE ~ NA_character_
+    ),
+    health_status_grouped = factor(health_status_grouped, 
+                                   levels = c("Very Good", "Good", "Satisfactory", "Not Good/Bad"))
+  )
+
+ggplot(cleaned_data, aes(x = factor(smoking_status), fill = Gender)) +
+  geom_bar(position = "dodge") +  # dodge' for side-by-side bars
+  facet_wrap(~ health_status_grouped, scales = "free_y") +
+  labs(
+    title = "Health Status by Gender and Smoking Status",
+    x = "Smoking Status",
+    y = "Count",
+    fill = "Gender"
+  ) +
+  scale_fill_manual(values = c("blue", "pink")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  ) +
+  geom_text(
+    aes(label = after_stat(count)),  # after_stat(count) updated
+    stat = "count", 
+    position = position_dodge(0.8),  # Side-by-side position adjustment
+    size = 3
+  )
+
+```
+
+Health Status by Age and Smoking Status Visualization
+```{r age-smoking-status-appendix, echo=TRUE, eval=FALSE}
+cleaned_data <- cleaned_data %>%
+  mutate(
+    health_status_grouped = case_when(
+      health_status %in% c("Not Good", "Bad") ~ "Not Good/Bad",   
+      health_status == "Very Good" ~ "Very Good",
+      health_status == "Good" ~ "Good",
+      health_status == "Satisfactory" ~ "Satisfactory", 
+      TRUE ~ NA_character_
+    ),
+    health_status_grouped = factor(health_status_grouped, 
+                                   levels = c("Very Good", "Good", "Satisfactory", "Not Good/Bad")),
+    
+    age_group = case_when(
+      Age >= 18 & Age <= 40 ~ "18-40",
+      Age >= 41 & Age <= 60 ~ "41-60",
+      Age >= 61 & Age <= 80 ~ "61-80",
+      TRUE ~ "Other"
+    )
+  )
+
+ggplot(cleaned_data, aes(x = factor(age_group), fill = factor(smoking_status))) +
+  geom_bar(position = "dodge") +
+  facet_wrap(~ health_status_grouped, scales = "free_y") + 
+  labs(
+    title = "Health Status by Age Group and Smoking Status",
+    x = "Age Group",
+    y = "Count",
+    fill = "Smoking Status"
+  ) +
+  scale_fill_manual(values = c("red", "green")) + 
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  )
+```
+
+Health Status by Education Completed and Smoking Status Visualization
+```{r education-smoking-status-appendix, echo=TRUE, eval=FALSE}
+ggplot(merged_data, aes(x = factor(smoking_status), y = health_status_numeric, color = factor(Education_completed), group = Education_completed)) +
+  geom_smooth(method = "loess", se = FALSE, size = 1.5, span = 0.8) +  
+  labs(
+    title = "Health Status by Education Completed and Smoking Status",
+    x = "Smoking Status",
+    y = "Health Status",
+    color = "Education Completed"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  )
+```
+
+# Dataset Information
+
+- SOEP Documentation: Detailed description of the SOEP dataset can be found here: [SOEP Documentation](https://www.diw.de/en/diw_02.c.222729.en/about_soep.html).
+- Dataset Variables:
+  - health_status (ple0008): Self-reported health status.
+  - smoking_status (ple0081_v2): Smoking behavior (0 = Non-Smoker, 1 = Smoker).
+  - Age (d11101): Respondent's age.
+  - Gender (d11102ll): Respondent's gender.
+  - Education_completed (plg0076): Education successfully completed.
+
+# References
+
+According to recent studies on smoking behavior and health [@diw2020].
+
+## References
+
+
